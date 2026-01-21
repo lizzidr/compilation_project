@@ -137,13 +137,8 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
-<<<<<<< HEAD
-          root->type =type ; 
-            if (root->type == TYPE_NONE) {
-=======
             root->type = type; // Mise à jour du type de la declaration 
             if(root->type == TYPE_NONE){ // Occurence d'utilisation (donc pas de type encore)
->>>>>>> 794d28e9183d9fd650f5d8635f6c2e253aef1e3d
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
                 node_t decl_node = get_decl_node(root->ident);
                 if (!decl_node) {
