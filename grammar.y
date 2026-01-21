@@ -423,7 +423,6 @@ node_t make_node_string(char *s) {
 node_t make_node_int(int64_t v) {
     node_t n = make_node(NODE_INTVAL, 0);
     n->value = v;
-    n->type = TYPE_INT;
     return n;
 }
 
@@ -431,7 +430,6 @@ node_t make_node_int(int64_t v) {
 node_t make_node_bool(int64_t v) {
     node_t n = make_node(NODE_BOOLVAL, 0);
     n->value = v;
-    n->type = TYPE_BOOL;
     return n;
 }
 
