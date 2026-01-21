@@ -137,8 +137,8 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
-            // Si decl_node est déjà défini, c'est une déclaration
-            if (!root->decl_node) {
+          root->type =type ; 
+            if (root->type == TYPE_NONE) {
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
                 node_t decl_node = get_decl_node(root->ident);
                 if (!decl_node) {
@@ -157,6 +157,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_TYPE):{
           printf("Analyse passe 1 NODE_TYPE\n");
+          break;
         }
 
         case(NODE_INTVAL):{
@@ -167,6 +168,14 @@ void analyse_passe_1(node_t root, node_type type) {
         case(NODE_BOOLVAL):{
           root->type = TYPE_BOOL;
           break;
+        }
+
+          case(NODE_STRINGVAL):{
+
+          root -> offset = add_string(root->str);
+          root -> type = TYPE_NONE;
+          break;
+
         }
             
          /* -------- instructions de contrôle -------- */
@@ -184,6 +193,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
          
         case NODE_WHILE: {
+          printf("Analyse passe 1 NODE_WHILE\n");
           if (root-> opr[0]) analyse_passe_1(root->opr[0], type);
 
           if (root->opr[0]->type != TYPE_BOOL)
@@ -196,11 +206,12 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case NODE_FOR: {
-           if (root->opr[0]) analyse_passe_1(root->opr[0], type); /* init */
-           if (root->opr[1]) {
-              analyse_passe_1(root->opr[1], type); /* cond */
-              if (root->opr[1]->type != TYPE_BOOL)
-                  print_error(root->lineno, "for condition must be bool");
+          printf("Analyse passe 1 NODE_FOR\n");
+          if (root->opr[0]) analyse_passe_1(root->opr[0], type); /* init */
+          if (root->opr[1]) {
+            analyse_passe_1(root->opr[1], type); /* cond */
+            if (root->opr[1]->type != TYPE_BOOL)
+                print_error(root->lineno, "for condition must be bool");
             }
             if (root->opr[2]) analyse_passe_1(root->opr[2], type); /* step */
             if (root->opr[3]) analyse_passe_1(root->opr[3], type); /* body */
@@ -209,6 +220,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
 
         case(NODE_DOWHILE):{
+          printf("Analyse passe 1 NODE_DOWHILE\n");
           if (root->opr[0]) analyse_passe_1(root->opr[0], type); 
           if (root-> opr[1]) analyse_passe_1(root->opr[1], type);
             
@@ -217,6 +229,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case NODE_PRINT: {
+          printf("Analyse passe 1 NODE_PRINT\n");
           if (root->opr[0]) analyse_passe_1(root->opr[0], type);
             break;
 
@@ -293,20 +306,53 @@ void analyse_passe_1(node_t root, node_type type) {
             break;
         }
 
+        case(NODE_BNOT):{
+          if(root->opr[0]) analyse_passe_1(root->opr[0],type);
+          if(root->opr[1])analyse_passe_1(root->opr[1],type);
+
+          if (root->opr[0]->type != TYPE_INT)
+            print_error(root->lineno,"bitwise not expects int operand");
+
+        root->type = TYPE_INT;
+        break;
+        }
+
         /* -------- bitwise -------- */
-        case(NODE_BAND):{}
+      case(NODE_BAND):
+      case(NODE_BOR):
+      case(NODE_BXOR):{
+
+        if (root->opr[0]->type != TYPE_INT || root->opr[1]->type != TYPE_INT)
+          print_error(root->lineno,"bitwise operator expects int operands");
+
+        root->type = TYPE_INT;
+        break;
+        }
 
 
+        case(NODE_SLL):
+        case(NODE_SRA):
+        case(NODE_SRL):{
+          if(root->opr[0]) analyse_passe_1(root->opr[0],type);
+          if(root->opr[1])analyse_passe_1(root->opr[1],type);
+
+          if (root->opr[0]->type != TYPE_INT || root->opr[1]->type != TYPE_INT)
+            print_error(root->lineno,"shift operator expects int operands");
+
+        root->type = TYPE_INT;
+        break;
+
+        }
 
 
 
     }
 
-    /* Parcours des enfants
+    //Parcours des enfants
     for (int i = 0; i < root->nops; i++) {
-        analyse_passe_1(root->opr[i]);
+        analyse_passe_1(root->opr[i],type);
     }
-    */
+    
 }
 
   
