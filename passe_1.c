@@ -137,6 +137,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
+            printf("Analyse passe 1 NODE_IDENT\n");
             root->type = type; // Mise à jour du type de la declaration 
             if(root->type == TYPE_NONE){ // Occurence d'utilisation (donc pas de type encore)
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
@@ -276,12 +277,11 @@ void analyse_passe_1(node_t root, node_type type) {
             if (root->opr[0]->type != root->opr[1]->type)
                 print_error(root->lineno, "==/!= expects operands of same type");
 
-            /* souvent: bool résultat */
             root->type = TYPE_BOOL;
             break;
         }
 
-        /* -------- logique -------- */
+        /* -------- opérations logiques -------- */
         case NODE_AND:
         case NODE_OR: {
             analyse_passe_1(root->opr[0], type);
@@ -313,11 +313,12 @@ void analyse_passe_1(node_t root, node_type type) {
         break;
         }
 
-        /* -------- bitwise -------- */
+        /* -------- opérations binaires -------- */
       case(NODE_BAND):
       case(NODE_BOR):
       case(NODE_BXOR):{
-
+        if(root->opr[0]) analyse_passe_1(root->opr[0],type);
+        if(root->opr[1])analyse_passe_1(root->opr[1],type);
         if (root->opr[0]->type != TYPE_INT || root->opr[1]->type != TYPE_INT)
           print_error(root->lineno,"bitwise operator expects int operands");
 
@@ -344,11 +345,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
     }
 
-    //Parcours des enfants
-    for (int i = 0; i < root->nops; i++) {
-        analyse_passe_1(root->opr[i],type);
-    }
-    
+
 }
 
   

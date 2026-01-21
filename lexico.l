@@ -71,10 +71,10 @@ COMMENTAIRE     "//"[^\n]*
 "then"          RETURN(TOK_THEN);
 "else"          RETURN(TOK_ELSE);
 "="             RETURN(TOK_AFFECT);
-"|"             RETURN(TOK_OR);
-"&"             RETURN(TOK_AND);
-"||"            RETURN(TOK_BOR);
-"&&"            RETURN(TOK_BAND);
+"||"            RETURN(TOK_OR);
+"&&"            RETURN(TOK_AND);
+"|"             RETURN(TOK_BOR);
+"&"             RETURN(TOK_BAND);
 "=="            RETURN(TOK_EQ);
 "!="            RETURN(TOK_NE);
 ">="            RETURN(TOK_GE);
