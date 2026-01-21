@@ -137,8 +137,8 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
-            // Si decl_node est déjà défini, c'est une déclaration
-            if (!root->decl_node) {
+            root->type = type; // Mise à jour du type de la declaration 
+            if(root->type == TYPE_NONE){ // Occurence d'utilisation (donc pas de type encore)
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
                 node_t decl_node = get_decl_node(root->ident);
                 if (!decl_node) {
@@ -221,10 +221,6 @@ void analyse_passe_1(node_t root, node_type type) {
             break;
 
         }
-
- 
-        
-    
 
         /* Opérateurs binaires (arithmétique, logique, etc.) */
         /* -------- opérations arithmétiques -------- */
