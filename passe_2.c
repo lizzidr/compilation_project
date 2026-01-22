@@ -15,8 +15,9 @@ void gen_code_passe_2(node_t root) {
         case(NODE_PROGRAM):
         {
             create_data_sec_inst(); // Création de la section .data
-            create_text_sec_inst();
             gen_code_passe_2(root->opr[0]); // declarations
+
+            create_text_sec_inst(); // Création de la section .text
             gen_code_passe_2(root->opr[1]); // main
             break;
         }
@@ -38,19 +39,22 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_DECL):
         {
-            if(root->opr[1])
+            gen_code_passe_2(root->opr[0]); // 
+            gen_code_passe_2(root->opr[1]); // 
             break;
         }
 
         case(NODE_IDENT):
         {
-            
+            if(root->global_decl){ // declaration globale = ajouter dans .data
+                create_word_inst(root->ident, root->value);
+            }
+            break;
         }
 
         case(NODE_FUNC):
         {
             create_label_str_inst(root->opr[1]->ident); // label de la fonction main
-            
             
             gen_code_passe_2(root->opr[2]);
             break;
