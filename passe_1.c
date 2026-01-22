@@ -10,6 +10,8 @@
 
 extern int yylineno;
 extern int trace_level;
+static int in_global_context = 0;
+
 
 
 static void print_error(int line, const char* msg){
@@ -24,6 +26,7 @@ void analyse_passe_1(node_t root, node_type type) {
     switch(root->nature){
         case(NODE_PROGRAM): {
             printf("Analyse passe 1 NODE_PROGRAM\n");
+            in_global_context = 1;
             push_global_context(); // A appeller uniquement si il y a NODE_DECLS?
             if (root->opr[0]!= NULL)
               analyse_passe_1(root->opr[0], type); // déclarations globales
@@ -43,6 +46,7 @@ void analyse_passe_1(node_t root, node_type type) {
         
         case(NODE_FUNC):{
             printf("Analyse passe 1 NODE_FUNC\n");
+            in_global_context = 0;
             reset_env_current_offset();  // Reset de l'offset à 0
 
             ///// type de retour doit etre void:
@@ -108,6 +112,9 @@ void analyse_passe_1(node_t root, node_type type) {
                 print_error(root->lineno, "variable already declared in this scope");
             }
             root->opr[0]->offset = off; // Sauvegarde de l'offset dans le NODE_IDENT
+            // Mise à jour du champ global_decl
+            if(in_global_context == 1) root->opr[0]->global_decl = true;
+            else root->opr[0]->global_decl = false;
 
             // 3. Analyser l'identifiant lui-même
             analyse_passe_1(root->opr[0], type);  
