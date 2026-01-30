@@ -39,30 +39,57 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_DECL):
         {
-            gen_code_passe_2(root->opr[0]); // 
-            gen_code_passe_2(root->opr[1]); // 
+            int32_t registre;
+            registre = get_num_registers();
+
+            if(root->opr[0]->global_decl){ // declaration globale = ajouter dans .data
+                if(root->opr[1] != NULL){
+                    create_word_inst(root->opr[0]->ident, root->opr[1]->value);
+                }
+                else {
+                    create_word_inst(root->opr[0]->ident, 0);
+                }
+            }   
+            else {
+                // Initialisation de la variable
+                if(root->opr[1] != NULL) { // Si la variable est initialisée
+                    // Initialisation par une constante ou par une expression
+                
+                    gen_code_passe_2(root->opr[1]); // Analyse du 
+                    create_sw_inst(registre, root->opr[0]->offset, 29);
+                    }
+                }
+            }
+            
             break;
-        }
+        
+
 
         case(NODE_IDENT):
         {
-            if(root->global_decl){ // declaration globale = ajouter dans .data
-                create_word_inst(root->ident, root->value);
-            }
             break;
         }
 
         case(NODE_FUNC):
         {
             create_label_str_inst(root->opr[1]->ident); // label de la fonction main
-            
+            create_stack_allocation_inst();
             gen_code_passe_2(root->opr[2]);
+
+            create_stack_deallocation_inst(root->offset);
             break;
         }
 
         case(NODE_BLOCK):
         {
+            gen_code_passe_2(root->opr[0]);
+            gen_code_passe_2(root->opr[1]);
+        }
 
+
+        case(NODE_STRINGVAL):
+        {
+            break;
         }
 }
 }

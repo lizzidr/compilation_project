@@ -24,7 +24,7 @@ void analyse_passe_1(node_t root, node_type type) {
     if (root == NULL) return;
 
     switch(root->nature){
-        case(NODE_PROGRAM): {
+        case(NODE_PROGRAM): {          
             printf("Analyse passe 1 NODE_PROGRAM\n");
             in_global_context = 1;
             push_global_context(); // A appeller uniquement si il y a NODE_DECLS?
@@ -351,8 +351,6 @@ void analyse_passe_1(node_t root, node_type type) {
 
 
     }
-
-
 }
 
   
