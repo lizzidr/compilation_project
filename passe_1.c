@@ -10,6 +10,8 @@
 
 extern int yylineno;
 extern int trace_level;
+static int in_global_context = 0;
+
 
 
 static void print_error(int line, const char* msg){
@@ -24,6 +26,7 @@ void analyse_passe_1(node_t root, node_type type) {
     switch(root->nature){
         case(NODE_PROGRAM): {
             printf("Analyse passe 1 NODE_PROGRAM\n");
+            in_global_context = 1;
             push_global_context(); // A appeller uniquement si il y a NODE_DECLS?
             if (root->opr[0]!= NULL)
               analyse_passe_1(root->opr[0], type); // déclarations globales
@@ -43,6 +46,7 @@ void analyse_passe_1(node_t root, node_type type) {
         
         case(NODE_FUNC):{
             printf("Analyse passe 1 NODE_FUNC\n");
+            in_global_context = 0;
             reset_env_current_offset();  // Reset de l'offset à 0
 
             ///// type de retour doit etre void:
@@ -108,6 +112,9 @@ void analyse_passe_1(node_t root, node_type type) {
                 print_error(root->lineno, "variable already declared in this scope");
             }
             root->opr[0]->offset = off; // Sauvegarde de l'offset dans le NODE_IDENT
+            // Mise à jour du champ global_decl
+            if(in_global_context == 1) root->opr[0]->global_decl = true;
+            else root->opr[0]->global_decl = false;
 
             // 3. Analyser l'identifiant lui-même
             analyse_passe_1(root->opr[0], type);  
@@ -137,13 +144,9 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
-<<<<<<< HEAD
-          root->type =type ; 
-            if (root->type == TYPE_NONE) {
-=======
+            printf("Analyse passe 1 NODE_IDENT\n");
             root->type = type; // Mise à jour du type de la declaration 
             if(root->type == TYPE_NONE){ // Occurence d'utilisation (donc pas de type encore)
->>>>>>> 794d28e9183d9fd650f5d8635f6c2e253aef1e3d
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
                 node_t decl_node = get_decl_node(root->ident);
                 if (!decl_node) {
@@ -281,12 +284,11 @@ void analyse_passe_1(node_t root, node_type type) {
             if (root->opr[0]->type != root->opr[1]->type)
                 print_error(root->lineno, "==/!= expects operands of same type");
 
-            /* souvent: bool résultat */
             root->type = TYPE_BOOL;
             break;
         }
 
-        /* -------- logique -------- */
+        /* -------- opérations logiques -------- */
         case NODE_AND:
         case NODE_OR: {
             analyse_passe_1(root->opr[0], type);
@@ -318,11 +320,12 @@ void analyse_passe_1(node_t root, node_type type) {
         break;
         }
 
-        /* -------- bitwise -------- */
+        /* -------- opérations binaires -------- */
       case(NODE_BAND):
       case(NODE_BOR):
       case(NODE_BXOR):{
-
+        if(root->opr[0]) analyse_passe_1(root->opr[0],type);
+        if(root->opr[1])analyse_passe_1(root->opr[1],type);
         if (root->opr[0]->type != TYPE_INT || root->opr[1]->type != TYPE_INT)
           print_error(root->lineno,"bitwise operator expects int operands");
 
@@ -349,11 +352,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
     }
 
-    //Parcours des enfants
-    for (int i = 0; i < root->nops; i++) {
-        analyse_passe_1(root->opr[i],type);
-    }
-    
+
 }
 
   
