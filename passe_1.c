@@ -8,14 +8,13 @@
 #include "miniccutils.h"
 
 
-extern int yylineno;
 extern int trace_level;
 static int in_global_context = 0;
 
 
 
 static void print_error(int line, const char* msg){
-  printf("Error line %d : %s\n", yylineno, msg);
+  printf("Error line %d : %s\n", line, msg);
   exit(1);
 }
 
@@ -25,7 +24,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
     switch(root->nature){
         case(NODE_PROGRAM): {          
-            printf("Analyse passe 1 NODE_PROGRAM\n");
+            printf_level(5, "Analyse passe 1 NODE_PROGRAM\n");
             in_global_context = 1;
             push_global_context(); // A appeller uniquement si il y a NODE_DECLS?
             if (root->opr[0]!= NULL)
@@ -38,14 +37,14 @@ void analyse_passe_1(node_t root, node_type type) {
             }
         
         case(NODE_LIST):{
-          printf("Analyse passe 1 NODE_LIST\n");
+          printf_level(5, "Analyse passe 1 NODE_LIST\n");
           analyse_passe_1(root->opr[0], type); // analyse de l'enfant NODE_DECLS
           analyse_passe_1(root->opr[1], type);  // analyse de l'enfant NODE_DECLS
           break;
         }
         
         case(NODE_FUNC):{
-            printf("Analyse passe 1 NODE_FUNC\n");
+            printf_level(5, "Analyse passe 1 NODE_FUNC\n");
             in_global_context = 0;
             reset_env_current_offset();  // Reset de l'offset à 0
 
@@ -71,7 +70,7 @@ void analyse_passe_1(node_t root, node_type type) {
           }
         
         case(NODE_BLOCK):{
-            printf("Analyse passe 1 NODE_BLOCK\n");
+            printf_level(5, "Analyse passe 1 NODE_BLOCK\n");
             push_context();              // Contexte local de la fonction (main)
             if (root->opr[0]!= NULL)
               analyse_passe_1(root->opr[0], type);
@@ -85,7 +84,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case(NODE_DECLS):{
-          printf("Analyse passe 1 NODE_DECLS\n");
+          printf_level(5, "Analyse passe 1 NODE_DECLS\n");
           node_type current_type;
           if (root->opr[0]->type == TYPE_VOID ){
             print_error(root->lineno, "variable declaration with type void");
@@ -101,7 +100,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_DECL):
         {
-            printf("Analyse passe 1 NODE_DECL\n");
+            printf_level(5, "Analyse passe 1 NODE_DECL\n");
 
             // 1. mettre à jour le type de l'identifiant (hérité de NODE_DECLS)
             root->opr[0]->type = type;
@@ -121,9 +120,10 @@ void analyse_passe_1(node_t root, node_type type) {
 
             // 4. Analyser l'expression d'initialisation si elle existe
             if (root->opr[1]) {
+                type = TYPE_NONE;
                 analyse_passe_1(root->opr[1], type);  // l'initialisation doit être du même type
                 // Vérification sémantique : type correspond au type de l'identifiant
-                if (root->opr[1]->type != type) {
+                if (root->opr[1]->type != root->opr[0]->type) {
                     print_error(root->lineno, "type mismatch in variable initialization");
                 }
             }
@@ -131,7 +131,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case(NODE_AFFECT):{
-            printf("Analyse passe 1 NODE_AFFECT\n");
+            printf_level(5, "Analyse passe 1 NODE_AFFECT\n");
             analyse_passe_1(root->opr[0], type);
             analyse_passe_1(root->opr[1], type);
 
@@ -144,19 +144,22 @@ void analyse_passe_1(node_t root, node_type type) {
 
         case(NODE_IDENT):
         {
-            printf("Analyse passe 1 NODE_IDENT\n");
+            printf_level(5, "Analyse passe 1 NODE_IDENT\n");
             root->type = type; // Mise à jour du type de la declaration 
             if(root->type == TYPE_NONE){ // Occurence d'utilisation (donc pas de type encore)
+                printf_level(5, "IDENT type = NONE\n"); 
                 // C'est une utilisation, on cherche la déclaration dans l'environnement
                 node_t decl_node = get_decl_node(root->ident);
-                if (!decl_node) {
+                if (decl_node == NULL) {
                     print_error(root->lineno, "variable used before declaration");
                 }
                 root->decl_node = decl_node;        // pointer vers la déclaration
                 root->type = decl_node->type;       // copier le type de la déclaration
                 root->offset = decl_node->offset;   // copier l'offset
+                root->global_decl = decl_node->global_decl;
             } else {
                 // C'est une déclaration, on met à jour le type et l'offset
+                printf_level(5, "IDENT type = AUTRE\n"); 
                 root->type = type;
                 // offset devrait déjà être assigné dans NODE_DECL
             }
@@ -164,7 +167,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case(NODE_TYPE):{
-          printf("Analyse passe 1 NODE_TYPE\n");
+          printf_level(5, "Analyse passe 1 NODE_TYPE\n");
           break;
         }
 
@@ -188,7 +191,7 @@ void analyse_passe_1(node_t root, node_type type) {
             
          /* -------- instructions de contrôle -------- */
         case NODE_IF: {
-          printf("Analyse passe 1 NODE_IF\n");
+          printf_level(5, "Analyse passe 1 NODE_IF\n");
           analyse_passe_1(root->opr[0], type); /* cond */
           if (root->opr[0]->type != TYPE_BOOL)
             print_error(root->lineno, "if condition must be bool");
@@ -201,7 +204,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
          
         case NODE_WHILE: {
-          printf("Analyse passe 1 NODE_WHILE\n");
+          printf_level(5, "Analyse passe 1 NODE_WHILE\n");
           if (root-> opr[0]) analyse_passe_1(root->opr[0], type);
 
           if (root->opr[0]->type != TYPE_BOOL)
@@ -214,7 +217,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case NODE_FOR: {
-          printf("Analyse passe 1 NODE_FOR\n");
+          printf_level(5, "Analyse passe 1 NODE_FOR\n");
           if (root->opr[0]) analyse_passe_1(root->opr[0], type); /* init */
           if (root->opr[1]) {
             analyse_passe_1(root->opr[1], type); /* cond */
@@ -228,7 +231,7 @@ void analyse_passe_1(node_t root, node_type type) {
 
 
         case(NODE_DOWHILE):{
-          printf("Analyse passe 1 NODE_DOWHILE\n");
+          printf_level(5, "Analyse passe 1 NODE_DOWHILE\n");
           if (root->opr[0]) analyse_passe_1(root->opr[0], type); 
           if (root-> opr[1]) analyse_passe_1(root->opr[1], type);
             
@@ -237,7 +240,7 @@ void analyse_passe_1(node_t root, node_type type) {
         }
 
         case NODE_PRINT: {
-          printf("Analyse passe 1 NODE_PRINT\n");
+          printf_level(5, "Analyse passe 1 NODE_PRINT\n");
           if (root->opr[0]) analyse_passe_1(root->opr[0], type);
             break;
 
@@ -347,9 +350,6 @@ void analyse_passe_1(node_t root, node_type type) {
         break;
 
         }
-
-
-
     }
 }
 
