@@ -21,10 +21,128 @@ extern bool stop_after_syntax;
 extern bool stop_after_verif;
 
 
-void parse_args(int argc, char ** argv) {
-    // A implementer (la ligne suivante est a changer)
-    infile = argv[1];
+void banner(void)
+{
+    printf("MiniC Compiler\n");
+    printf("Binome : Prenom Nom, Prenom Nom\n");
 }
+
+void help(void)
+{
+    printf("Usage: minicc [options] fichier.c\n");
+    printf("Options:\n");
+    printf("  -h            Afficher cette aide\n");
+    printf("  -b            Afficher la bannière\n");
+    printf("  -o <file>     Nom du fichier assembleur (defaut: out.s)\n");
+    printf("  -t <n>        Niveau de trace (0 a 5)\n");
+    printf("  -r <n>        Nombre de registres (4 a 8)\n");
+    printf("  -s            Arreter apres l'analyse syntaxique\n");
+    printf("  -v            Arreter apres la passe de verification\n");
+}
+
+
+void parse_args(int argc, char **argv)
+{
+    bool infile_arg = false;
+    bool banner_arg = false;
+
+    /* valeurs par défaut */
+    outfile = "out.s";
+    trace_level = DEFAULT_TRACE_LEVEL;
+    int max_registers = 8;
+    stop_after_syntax = false;
+    stop_after_verif = false;
+
+    if (argc == 1) {
+        printf("Usage: minicc [options] <input_file>\n");
+        exit(0);
+    }
+
+    for (int i = 1; i < argc; i++) {
+
+        if (strcmp(argv[i], "-h") == 0) {
+            help();
+            exit(0);
+        }
+
+        else if (strcmp(argv[i], "-b") == 0) {
+            banner_arg = true;
+        }
+
+        else if (strcmp(argv[i], "-o") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Error: missing argument for -o\n");
+                exit(1);
+            }
+            outfile = argv[i];
+        }
+
+        else if (strcmp(argv[i], "-t") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Error: missing argument for -t\n");
+                exit(1);
+            }
+            trace_level = atoi(argv[i]);
+            if (trace_level < 0 || trace_level > 5) {
+                fprintf(stderr, "Error: trace level must be between 0 and 5\n");
+                exit(1);
+            }
+        }
+
+        else if (strcmp(argv[i], "-r") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Error: missing argument for -r\n");
+                exit(1);
+            }
+            max_registers = atoi(argv[i]);
+            if (max_registers < 4 || max_registers > 8) {
+                fprintf(stderr, "Error: max registers must be between 4 and 8\n");
+                exit(1);
+            }
+            set_max_registers(max_registers);
+        }
+
+        else if (strcmp(argv[i], "-s") == 0) {
+            stop_after_syntax = true;
+        }
+
+        else if (strcmp(argv[i], "-v") == 0) {
+            stop_after_verif = true;
+        }
+
+        else {
+            /* fichier source */
+            if (infile_arg) {
+                fprintf(stderr, "Error: only one input file is allowed");
+                exit(1);
+            }
+            infile = argv[i];
+            infile_arg = true;
+        }
+    }
+
+    /* vérifications finales */
+
+    if (stop_after_syntax && stop_after_verif) {
+        fprintf(stderr, "Error: options -s and -v cannot be used at the same time\n");
+        exit(1);
+    }
+
+    if (banner_arg) {
+        if (argc != 2) {
+            fprintf(stderr, "Error: -b option must not be used with other options\n");
+            exit(1);
+        }
+        banner();
+        exit(0);
+    }
+
+    if (!infile_arg) {
+        fprintf(stderr, "Error: input file is required\n");
+        exit(1);
+    }
+}
+
 
 
 
