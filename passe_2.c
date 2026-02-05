@@ -7,6 +7,9 @@
 
 
 extern int trace_level;
+static int in_print_context = 0;
+
+
 
 void gen_code_passe_2(node_t root) {
     if (root == NULL) return;
@@ -14,19 +17,30 @@ void gen_code_passe_2(node_t root) {
     switch(root->nature){
         case(NODE_PROGRAM):
         {
+            int32_t strings_number = get_global_strings_number();
+
+            // Data section
             create_data_sec_inst(); // Création de la section .data
             gen_code_passe_2(root->opr[0]); // declarations
+            for (int32_t i = 0; i < strings_number; i++) {
+                create_asciiz_inst(NULL, get_global_string(i)); // chaines de caractères
+            }
 
+            // Text section
             create_text_sec_inst(); // Création de la section .text
             gen_code_passe_2(root->opr[1]); // main
+            
+            // Syscall exit
+            create_ori_inst(2, 0, 10); 
+            create_syscall_inst();
             break;
         }
 
         case(NODE_LIST):
         {
-            if (root->opr[0])
+            if (root->opr[0] != NULL)
                 gen_code_passe_2(root->opr[0]);
-            if (root->opr[1])
+            if (root->opr[1] != NULL)
                 gen_code_passe_2(root->opr[1]);
             break;
         }
@@ -43,21 +57,24 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_BLOCK):
         {
-            gen_code_passe_2(root->opr[0]);
-            gen_code_passe_2(root->opr[1]);
+            if (root->opr[0] != NULL)
+                gen_code_passe_2(root->opr[0]);
+            if (root->opr[1] != NULL)
+                gen_code_passe_2(root->opr[1]);
             break;
         }
 
         case(NODE_DECLS):
         {
-            gen_code_passe_2(root->opr[1]); // liste de NODE_DECL
+            if (root->opr[1] != NULL)
+                gen_code_passe_2(root->opr[1]); // liste de NODE_DECL
             break;
         }
 
         case(NODE_DECL):
         {
             int32_t registre;
-            registre = get_num_registers();
+            registre = get_current_reg();
 
             if(root->opr[0]->global_decl){ // declaration globale = ajouter dans .data
                 if(root->opr[1] != NULL){
@@ -79,20 +96,22 @@ void gen_code_passe_2(node_t root) {
             }
 
         case NODE_AFFECT: {
-            gen_code_passe_2(root->opr[1]);
             int32_t registre = get_current_reg();
-
- 
-
+            int32_t stack_registre = get_stack_reg();
+            int32_t tmp_reg;
+            // Analyse expression d'affectation
+            
             if (root->opr[0]->decl_node->global_decl) {
                 allocate_reg();
-                int32_t tmp_reg = get_current_reg();
+                tmp_reg = get_current_reg();
                 create_lui_inst(tmp_reg, 0x1001);
                 create_sw_inst(registre, root->opr[0]->decl_node->offset, tmp_reg);
                 release_reg();
             } else {
-                create_sw_inst(registre, root->opr[0]->offset, get_stack_reg());
+                create_sw_inst(registre, root->opr[0]->offset, stack_registre);
             }
+
+            gen_code_passe_2(root->opr[1]); 
             break;
         }
         
@@ -113,6 +132,7 @@ void gen_code_passe_2(node_t root) {
         }
 
         case (NODE_IDENT): {
+            
             int32_t registre = get_current_reg();
 
             if (root->global_decl) {
@@ -121,13 +141,28 @@ void gen_code_passe_2(node_t root) {
             } else {
                 create_lw_inst(registre, root->offset, get_stack_reg());
             }
+            
+            // uniquement si on est dans print
+            if (in_print_context) {
+                // syscall print int
+                create_ori_inst(2, 0, 1); 
+                create_syscall_inst();
+            }
             break;
         }
 
-        
-        case(NODE_STRINGVAL):
+        case NODE_STRINGVAL:
         {
-            
+            if (!in_print_context)
+                break; // ce cas n'existe même pas anywaaay
+
+            create_lui_inst(4, 0x1001);
+            create_ori_inst(4, 4, root->offset);
+
+            // syscall print string
+            create_ori_inst(2, 0, 4); 
+            create_syscall_inst();
+
             break;
         }
 
@@ -163,161 +198,439 @@ void gen_code_passe_2(node_t root) {
             create_label_inst(Lend);
             break;
         }
-
-
         case(NODE_DOWHILE):{}
 
-
-
-
-        case(NODE_PRINT):{
-            for (int i = 0; i < root->nops; i++) {
-                gen_code_passe_2(root->opr[i]);
-                create_addu_inst(4, 8, 0);
-                if (root->opr[i]->nature == NODE_STRINGVAL) {
-                create_ori_inst(2, 0, 4);   // syscall print_string
-            } else {
-                create_ori_inst(2, 0, 1);   // syscall print_int
-            }
-                create_syscall_inst();
-                }
+        case NODE_PRINT: {
+            printf_level(5, "PASSE 2 NODE_PRINT \n");
+            // Analyser l'enfant du noeud (LIST ou IDENT ou STRING)
+            in_print_context = 1;
+            gen_code_passe_2(root->opr[0]);
+            in_print_context = 0;
             break;
-        
         }
 
-
-
-        /* Opérateurs binaires (arithmétique, logique, etc.) */
         /* -------- opérations arithmétiques -------- */
         case NODE_PLUS: {
-                gen_code_passe_2(root->opr[0]); // $8 = gauche
+            printf_level(5, "analyse passe 2 NODE_PLUS \n");
+            gen_code_passe_2(root->opr[0]); 
+            int32_t reg_left = get_current_reg();
 
-                if (root->opr[1] && root->opr[1]->nature == NODE_INTVAL) {
-                    create_addiu_inst(9, 0, root->opr[1]->value);
-                    create_addu_inst(8, 8, 9);
-                } else {
-                    create_addu_inst(9, 8, 0);      // $9 = gauche
-                    gen_code_passe_2(root->opr[1]); // $8 = droite
-                    create_addu_inst(8, 9, 8);      // $8 = gauche + droite
-                }
-                break;
+            //cas ou pas de registre dispo
+            if (!reg_available()) {
+                // on passe par la pile
+                push_temporary(reg_left); 
+                release_reg(); 
+
+                gen_code_passe_2(root->opr[1]); 
+                int32_t reg_right = get_current_reg();
+                
+                allocate_reg();
+                int32_t reg_restore = get_restore_reg(); 
+                pop_temporary(reg_restore);
+
+                create_addu_inst(reg_right, reg_restore, reg_right);
+
+                release_reg(); //liberer reg_store
+            }
+            else {
+                //cas normal
+                allocate_reg(); 
+                gen_code_passe_2(root->opr[1]); 
+                int32_t reg_right = get_current_reg();
+
+                create_addu_inst(reg_left, reg_left, reg_right); 
+              
+                release_reg();
+            }
+            break;
         }
 
-        case NODE_MINUS:{
-         gen_code_passe_2(root->opr[0]); // $8 = gauche
-                if (root->opr[1] && root->opr[1]->nature == NODE_INTVAL) {
-                    create_addiu_inst(9, 0, root->opr[1]->value);
-                    create_subu_inst(8, 8, 9);
-                } else {
-                    create_addu_inst(9, 8, 0);      // $9 = gauche
-                    gen_code_passe_2(root->opr[1]); // $8 = droite
-                    create_subu_inst(8, 9, 8);      // $8 = gauche - droite
-                }
-                break;   
+        case NODE_MINUS: {
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_subu_inst(reg_right, reg_restore, reg_right);
+            } else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_subu_inst(reg_left, reg_left, reg_right);
+                release_reg();
+            }
+            break;
         }
 
-        case NODE_MUL:{
-         gen_code_passe_2(root->opr[0]); // $8 = gauche
+        case NODE_MUL: {
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
 
-                if (root->opr[1] && root->opr[1]->nature == NODE_INTVAL) {
-                    create_addu_inst(9, 8, 0); // $9 = gauche
-                    create_addiu_inst(8, 0, root->opr[1]->value); //const
-                    create_mult_inst(9, 8); //LO = $9*$8
-                    create_mflo_inst(8); //$8 = LO
-                } else {
-                    create_addu_inst(9, 8, 0);      // $9 = gauche
-                    gen_code_passe_2(root->opr[1]); // $8 = droite
-                    create_mult_inst(8, 9);      // $8 = gauche * droite
-                    create_mflo_inst(8);
-                }
-                break;   
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_mult_inst(reg_restore, reg_right);
+                create_mflo_inst(reg_right);
+            } else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_mult_inst(reg_left, reg_right);
+                create_mflo_inst(reg_left);
+                release_reg();
+            }
+            break;
         }
 
-        case NODE_DIV:{
-         gen_code_passe_2(root->opr[0]); // $8 = gauche
+        case NODE_DIV: {
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
 
-                if (root->opr[1] && root->opr[1]->nature == NODE_INTVAL) {
-                    create_addu_inst(9, 8, 0); // $9 = gauche
-                    create_addiu_inst(8, 0, root->opr[1]->value); //const
-                    create_div_inst(9, 8); //LO = $9/$8
-                    create_mflo_inst(8); //$8 = LO
-                } else {
-                    create_addu_inst(9, 8, 0);      // $9 = gauche
-                    gen_code_passe_2(root->opr[1]); // $8 = droite
-                    create_div_inst(8, 9);      // $8 = gauche / droite
-                    create_mflo_inst(8);
-                }
-                break;    
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_div_inst(reg_restore, reg_right);
+                create_teq_inst(reg_right, 0);
+                create_mflo_inst(reg_right);
+            } else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_div_inst(reg_left, reg_right);
+                create_teq_inst(reg_right, 0);
+                create_mflo_inst(reg_left);
+                release_reg();
+            }
+            break;
         }
 
         case NODE_MOD: {
-        gen_code_passe_2(root->opr[0]); // $8 = gauche
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
 
-                if (root->opr[1] && root->opr[1]->nature == NODE_INTVAL) {
-                    create_addu_inst(9, 8, 0); // $9 = gauche
-                    create_addiu_inst(8, 0, root->opr[1]->value); //const
-                    create_div_inst(9, 8); //HI = $9/$8
-                    create_mfhi_inst(8); //$8 = HI
-                } else {
-                    create_addu_inst(9, 8, 0);      // $9 = gauche
-                    gen_code_passe_2(root->opr[1]); // $8 = droite
-                    create_div_inst(8, 9);      // $8 = gauche / droite
-                    create_mfhi_inst(8);
-                }
-                break;    
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_div_inst(reg_restore, reg_right);
+                create_teq_inst(reg_right, 0);
+                create_mfhi_inst(reg_right);
+            } else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_div_inst(reg_left, reg_right);
+                create_teq_inst(reg_right, 0);
+                create_mfhi_inst(reg_left);
+                release_reg();
+            }
+            break;
         }
 
         /* -------- comparaisons -------- */
         case NODE_LT: {
-            gen_code_passe_2(root->opr[0]);      
-            create_addu_inst(9, 8, 0);           
-            gen_code_passe_2(root->opr[1]);      
-            create_slt_inst(8, 9, 8);            
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            // gestion Spill
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]); // Droite
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                //reg_restore < reg_right
+                create_slt_inst(reg_right, reg_restore, reg_right);
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]); // Droite
+                int32_t reg_right = get_current_reg();
+
+                //reg_left < reg_right
+                create_slt_inst(reg_left, reg_left, reg_right);
+                
+                release_reg();
+            }
             break;
         }
 
         case NODE_GT: {
-            gen_code_passe_2(root->opr[0]);      
-            create_addu_inst(9, 8, 0);           
-            gen_code_passe_2(root->opr[1]);      
-            create_slt_inst(8, 8, 9);        
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                // reg_right < reg_restore
+                create_slt_inst(reg_right, reg_right, reg_restore); 
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                // reg_right < reg_left
+                create_slt_inst(reg_left, reg_right, reg_left);
+                
+                release_reg();
+            }
             break;
         }
 
-        case NODE_LE:{
-            gen_code_passe_2(root->opr[0]);      
-            create_addu_inst(9, 8, 0);          
-            gen_code_passe_2(root->opr[1]);     
-            create_slt_inst(8, 8, 9);            
-            create_xori_inst(8, 8, 1);           // $8 = a <= b
-            break; 
+        case NODE_LE: {
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                // reg_restore <= reg_right <=> !(reg_right < reg_restore)
+                create_slt_inst(reg_right, reg_right, reg_restore);
+                create_xori_inst(reg_right, reg_right, 1);
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                //reg_left <= reg_right <=> !(reg_right < reg_left)
+                create_slt_inst(reg_left, reg_right, reg_left);
+                create_xori_inst(reg_left, reg_left, 1);
+                
+                release_reg();
+            }
+            break;
         }
+
         case NODE_GE: {
-            gen_code_passe_2(root->opr[0]);      
-            create_addu_inst(9, 8, 0);           
-            gen_code_passe_2(root->opr[1]);      
-            create_slt_inst(8, 9, 8);           
-            create_xori_inst(8, 8, 1);           // $8 = a >= b
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                //reg_restore >= reg_right <=> !(reg_restore < reg_right)
+                create_slt_inst(reg_right, reg_restore, reg_right);
+                create_xori_inst(reg_right, reg_right, 1);
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                //reg_left >= reg_right <=> !(reg_left < reg_right)
+                create_slt_inst(reg_left, reg_left, reg_right);
+                create_xori_inst(reg_left, reg_left, 1);
+                
+                release_reg();
+            }
             break;
         }
 
 
-        case NODE_EQ:{
-            gen_code_passe_2(root->opr[0]);      
-            create_addu_inst(9, 8, 0);           
-            gen_code_passe_2(root->opr[1]);      
-            create_xor_inst(8, 9, 8);            
-            create_sltiu_inst(8, 8, 1);          // $8 = ($8 == 0) ? 1 : 0
+        case NODE_EQ: {
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_xor_inst(reg_right, reg_restore, reg_right);
+                create_sltiu_inst(reg_right, reg_right, 1);
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_xor_inst(reg_left, reg_left, reg_right);
+                create_sltiu_inst(reg_left, reg_left, 1);
+                
+                release_reg();
+            }
             break;
         }
 
         case NODE_NE: {
             gen_code_passe_2(root->opr[0]);
-            create_addu_inst(9, 8, 0);
-            gen_code_passe_2(root->opr[1]);
-            create_xor_inst(8, 9, 8);        // 0 si égaux
-            create_sltiu_inst(8, 8, 1);      // 1 si égaux
-            create_xori_inst(8, 8, 1);       // inverse => 1 si différents
+            int32_t reg_left = get_current_reg();
+
+            if (!reg_available()) {
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                create_xor_inst(reg_right, reg_restore, reg_right);
+                create_sltiu_inst(reg_right, reg_right, 1);
+                create_xori_inst(reg_right, reg_right, 1);
+            } 
+            else {
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]);
+                int32_t reg_right = get_current_reg();
+
+                create_xor_inst(reg_left, reg_left, reg_right);
+                create_sltiu_inst(reg_left, reg_left, 1);
+                create_xori_inst(reg_left, reg_left, 1);
+                
+                release_reg();
+            }
+            break;
+        }
+
+
+
+        /* -------- Opérations Binaires Logiques & Bitwise -------- */
+        case NODE_AND:  // &&
+        case NODE_OR:   // ||
+        case NODE_BAND: // &
+        case NODE_BOR:  // |
+        case NODE_BXOR: // ^
+        case NODE_SLL:  // <<
+        case NODE_SRA:  // >> 
+        case NODE_SRL:  // >>> 
+        {
+
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg_left = get_current_reg();
+
+            // spill
+            if (!reg_available()) {
+                // --- CAS SPILL ---
+                push_temporary(reg_left);
+                release_reg();
+
+                gen_code_passe_2(root->opr[1]); //DROITE
+                int32_t reg_right = get_current_reg();
+                
+                int32_t reg_restore = get_restore_reg();
+                pop_temporary(reg_restore);
+
+                switch(root->nature) {
+                    case NODE_AND:  create_and_inst(reg_right, reg_restore, reg_right); break;
+                    case NODE_OR:   create_or_inst(reg_right, reg_restore, reg_right); break;
+                    
+                    case NODE_BAND: create_and_inst(reg_right, reg_restore, reg_right); break;
+                    case NODE_BOR:  create_or_inst(reg_right, reg_restore, reg_right); break;
+                    case NODE_BXOR: create_xor_inst(reg_right, reg_restore, reg_right); break;
+
+                    
+                    case NODE_SLL:  create_sllv_inst(reg_right, reg_restore, reg_right); break;
+                    case NODE_SRA:  create_srav_inst(reg_right, reg_restore, reg_right); break;
+                    case NODE_SRL:  create_srlv_inst(reg_right, reg_restore, reg_right); break;
+                    default: break;
+                }
+            } 
+            else {
+                // cas normal 
+                allocate_reg();
+                gen_code_passe_2(root->opr[1]); // Générer DROITE
+                int32_t reg_right = get_current_reg();
+
+                
+                switch(root->nature) {
+                    case NODE_AND:  create_and_inst(reg_left, reg_left, reg_right); break;
+                    case NODE_OR:   create_or_inst(reg_left, reg_left, reg_right); break;
+                    
+                    case NODE_BAND: create_and_inst(reg_left, reg_left, reg_right); break;
+                    case NODE_BOR:  create_or_inst(reg_left, reg_left, reg_right); break;
+                    case NODE_BXOR: create_xor_inst(reg_left, reg_left, reg_right); break;
+
+                    case NODE_SLL:  create_sllv_inst(reg_left, reg_left, reg_right); break;
+                    case NODE_SRA:  create_srav_inst(reg_left, reg_left, reg_right); break;
+                    case NODE_SRL:  create_srlv_inst(reg_left, reg_left, reg_right); break;
+                    default: break;
+                }
+                
+                release_reg(); 
+            }
+            break;
+        }
+
+
+        /* -------- Opérations Unaires -------- */
+        case NODE_NOT: { 
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg = get_current_reg();
+            // 1 devient 0, 0 devient 1
+            create_xori_inst(reg, reg, 1);
+            break;
+        }
+
+        case NODE_BNOT: { 
+            gen_code_passe_2(root->opr[0]);
+            int32_t reg = get_current_reg();
+            create_nor_inst(reg, reg, 0);
             break;
         }
     }
