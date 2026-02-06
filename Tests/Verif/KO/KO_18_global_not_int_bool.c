@@ -1,0 +1,4 @@
+string g;
+void main() { ; }
+
+
