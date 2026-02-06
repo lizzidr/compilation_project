@@ -1,5 +1,5 @@
 void main() { 
-    int a, b; 
+    int a; 
     a = 3 + 4 * 2; 
-    b = (a-1)/2; 
+
 }
