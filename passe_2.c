@@ -38,6 +38,7 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_LIST):
         {
+            printf_level(5, "PASSE 2 NODE_LIST \n");
             if (root->opr[0] != NULL)
                 gen_code_passe_2(root->opr[0]);
             if (root->opr[1] != NULL)
@@ -57,6 +58,7 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_BLOCK):
         {
+            printf_level(5, "PASSE 2 NODE_BLOCK \n");
             if (root->opr[0] != NULL)
                 gen_code_passe_2(root->opr[0]);
             if (root->opr[1] != NULL)
@@ -66,6 +68,7 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_DECLS):
         {
+            printf_level(5, "PASSE 2 NODE_DECLS \n");
             if (root->opr[1] != NULL)
                 gen_code_passe_2(root->opr[1]); // liste de NODE_DECL
             break;
@@ -73,6 +76,7 @@ void gen_code_passe_2(node_t root) {
 
         case(NODE_DECL):
         {
+            printf_level(5, "PASSE 2 NODE_DECL \n");
             int32_t registre;
             registre = get_current_reg();
 
@@ -96,11 +100,12 @@ void gen_code_passe_2(node_t root) {
             }
 
         case NODE_AFFECT: {
+            printf_level(5, "PASSE 2 NODE_AFFECT \n");
             int32_t registre = get_current_reg();
             int32_t stack_registre = get_stack_reg();
             int32_t tmp_reg;
             // Analyse expression d'affectation
-            
+            gen_code_passe_2(root->opr[1]); 
             if (root->opr[0]->decl_node->global_decl) {
                 allocate_reg();
                 tmp_reg = get_current_reg();
@@ -111,12 +116,13 @@ void gen_code_passe_2(node_t root) {
                 create_sw_inst(registre, root->opr[0]->offset, stack_registre);
             }
 
-            gen_code_passe_2(root->opr[1]); 
+            
             break;
         }
         
         case (NODE_INTVAL):
         case (NODE_BOOLVAL): {
+            printf_level(5, "PASSE 2 NODE_VAL \n");
             int32_t registre = get_current_reg();
             if ((root->value >= 0) && (root->value <= 0xFFFF)) {
                 create_ori_inst(registre, 0, (int32_t)(root->value & 0xFFFF));
@@ -132,8 +138,11 @@ void gen_code_passe_2(node_t root) {
         }
 
         case (NODE_IDENT): {
-            
-            int32_t registre = get_current_reg();
+            printf_level(5, "PASSE 2 NODE_IDENT \n");
+
+            int32_t registre;
+            if (in_print_context) registre = 4;
+            else registre = get_current_reg();
 
             if (root->global_decl) {
                 create_lui_inst(registre, 0x1001);
@@ -148,13 +157,15 @@ void gen_code_passe_2(node_t root) {
                 create_ori_inst(2, 0, 1); 
                 create_syscall_inst();
             }
+            
             break;
         }
 
         case NODE_STRINGVAL:
         {
-            if (!in_print_context)
-                break; // ce cas n'existe même pas anywaaay
+            printf_level(5, "PASSE 2 NODE_STRINGVAL \n");
+            if (in_print_context = 0)
+                break; // ce cas n'existe même pas anyway
 
             create_lui_inst(4, 0x1001);
             create_ori_inst(4, 4, root->offset);
@@ -167,29 +178,71 @@ void gen_code_passe_2(node_t root) {
         }
 
         /* -------- instructions de contrôle -------- */
-        case NODE_IF: {}
-        case NODE_WHILE: {}
+        case NODE_IF: {
+            int32_t Lelse = get_new_label();
+            int32_t Lend  = get_new_label();
+
+            // condition
+            gen_code_passe_2(root->opr[0]);      // résultat dans $8
+            create_beq_inst(8, 0, Lelse);        // si faux -> else
+
+            // then
+            gen_code_passe_2(root->opr[1]);
+
+            // s'il y a un else, on saute la partie else après le then
+            if (root->nops == 3) {
+                create_j_inst(Lend);
+            }
+
+            // else
+            create_label_inst(Lelse);
+            if (root->nops == 3) {
+                gen_code_passe_2(root->opr[2]);
+                create_label_inst(Lend);
+            }
+
+            break;
+        }
+
+        case NODE_WHILE: {
+            int32_t Lcond = get_new_label();
+            int32_t Lend  = get_new_label();
+
+            create_label_inst(Lcond);
+
+            gen_code_passe_2(root->opr[0]);          // condition
+            int32_t reg = get_current_reg();
+            create_beq_inst(reg, 0, Lend);
+
+            gen_code_passe_2(root->opr[1]);          // body
+
+            create_j_inst(Lcond);
+            create_label_inst(Lend);
+            break;
+        }
+
         case NODE_FOR: {
+            printf_level(5, "PASSE 2 NODE_FOR \n");
             int32_t Lcond = get_new_label();
             int32_t Lend  = get_new_label();
 
             // init
-            if (root->opr[0]) gen_code_passe_2(root->opr[0]);
+            if (root->opr[0] != NULL) gen_code_passe_2(root->opr[0]);
 
             // label condition
             create_label_inst(Lcond);
 
             // condition
-            if (root->opr[1]) {
+            if (root->opr[1] != NULL) {
                 gen_code_passe_2(root->opr[1]);      // $8 = 0/1
                 create_beq_inst(8, 0, Lend);         // si faux -> sortir
             }
 
-            // corps
-            if (root->opr[3]) gen_code_passe_2(root->opr[3]);
-
-            // incrément
-            if (root->opr[2]) gen_code_passe_2(root->opr[2]);
+            // block / incrementation
+            
+            if (root->opr[3] != NULL) gen_code_passe_2(root->opr[3]);
+            
+            if (root->opr[2] != NULL) gen_code_passe_2(root->opr[2]);
 
             // retour au test
             create_j_inst(Lcond);
@@ -198,9 +251,25 @@ void gen_code_passe_2(node_t root) {
             create_label_inst(Lend);
             break;
         }
-        case(NODE_DOWHILE):{}
+        case(NODE_DOWHILE):{
+            int32_t Lstart = get_new_label();
 
-        case NODE_PRINT: {
+            // début de la boucle
+            create_label_inst(Lstart);
+
+            // body
+            gen_code_passe_2(root->opr[0]);
+
+            // condition
+            gen_code_passe_2(root->opr[1]);   // résultat dans $8 (0 ou 1)
+
+            // si condition vraie -> on reboucle
+            create_bne_inst(8, 0, Lstart);
+
+            break;
+        }
+
+        case (NODE_PRINT): {
             printf_level(5, "PASSE 2 NODE_PRINT \n");
             // Analyser l'enfant du noeud (LIST ou IDENT ou STRING)
             in_print_context = 1;

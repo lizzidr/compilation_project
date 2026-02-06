@@ -146,9 +146,31 @@ void parse_args(int argc, char **argv)
 
 
 
-void free_nodes(node_t n) {
-    // A implementer
+void free_nodes(node_t n)
+{
+    if (n == NULL)
+        return;
+
+    // Libérer récursivement les enfants 
+    if (n->opr != NULL) {
+        for (int i = 0; i < n->nops; i++) {
+            free_nodes(n->opr[i]);
+        }
+        free(n->opr);
+    }
+
+    // Libérer les champs spécifiques 
+    if (n->ident != NULL) {
+        free(n->ident);
+    }
+    if (n->str != NULL) {
+        free(n->str);
+    }
+
+    // Libérer le noeud lui-même
+    free(n);
 }
+
 
 
 char * strdupl(char * s) {

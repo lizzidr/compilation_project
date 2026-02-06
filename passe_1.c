@@ -121,10 +121,13 @@ void analyse_passe_1(node_t root, node_type type) {
             // 4. Analyser l'expression d'initialisation si elle existe
             if (root->opr[1]) {
                 type = TYPE_NONE;
+                if((in_global_context == 1) && ((root->opr[1]->nature != NODE_INTVAL) && (root->opr[1]->nature != NODE_BOOLVAL))){
+                  print_error(root->lineno, "global variable can only be initialized with litteral value");
+                }
                 analyse_passe_1(root->opr[1], type);  // l'initialisation doit être du même type
                 // Vérification sémantique : type correspond au type de l'identifiant
                 if (root->opr[1]->type != root->opr[0]->type) {
-                    print_error(root->lineno, "type mismatch in variable initialization");
+                  print_error(root->lineno, "type mismatch in variable initialization");
                 }
             }
             break;
