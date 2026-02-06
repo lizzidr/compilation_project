@@ -15,15 +15,6 @@ GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
 RESET="\033[0m"
 
-if [ ! -x "$MINICC" ]; then
-  echo "compilateur introuvable: $MINICC"
-  exit 1
-fi
-
-if [ ! -d "$OK_DIR" ] || [ ! -d "$KO_DIR" ]; then
-  echo "repertoires OK et KO introuvables."
-  exit 1
-fi
 
 total_ok=0
 total_ko=0
@@ -34,7 +25,6 @@ fail_ko=0
 
 run_one() {
   local file="$1"
-  # IMPORTANT: ton minicc semble attendre/bloquer si -v est avant le fichier
   "$MINICC" "$file" -v 2>&1
 }
 
@@ -45,6 +35,7 @@ contains_error() {
 extract_error_line() {
   local out="$1"
   local line
+
 
   line="$(printf "%s" "$out" | sed -nE 's/.*[Ee]rror[^0-9]*([0-9]+).*/\1/p' | head -n 1)"
   if [ -z "${line:-}" ]; then
@@ -123,17 +114,18 @@ else
         printf "%s\n" "$out" | sed 's/^/  /'
       else
         echo "  Sortie obtenue: (vide)"
+
       fi
     fi
   done
 fi
 
 echo
-echo "== Résumé =="
+echo "== Résumé=="
 echo "Verif/OK : $pass_ok / $total_ok OK, $fail_ok FAIL"
 echo "Verif/KO : $pass_ko / $total_ko OK, $fail_ko FAIL"
 
-# code retour non nul si un test échoue
+# code retour non nul si tout est fail ko
 if [ $fail_ok -ne 0 ] || [ $fail_ko -ne 0 ]; then
   exit 1
 fi
