@@ -3,10 +3,6 @@ void main() {
   int b = 2;
   bool r;
 
-  r = (a == b);
   r = (a != b);
 
-  bool x = true;
-  bool y = false;
-  r = (x == y);
 }

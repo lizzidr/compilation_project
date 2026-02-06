@@ -1,7 +1,6 @@
 void main() { 
-    int x = 1 ;
-    int sum;
-    if (x = 1) { 
-        sum = 2; 
+    int x = 5;
+    if (x < 10) { 
+        x = x +1 ; 
     } 
 }

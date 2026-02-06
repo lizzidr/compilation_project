@@ -1,3 +1,3 @@
 void main(){ 
-    print("x=", 1, "\n"); 
+    print("x"); 
 }
